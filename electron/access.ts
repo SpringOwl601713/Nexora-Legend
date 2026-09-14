@@ -63,6 +63,17 @@ export async function founderLogin(password:string){
   return data as {ok:true;token:string;expiresInSeconds:number};
 }
 
+export async function changeFounderPassword(token:string,currentPassword:string,newPassword:string){
+  const res = await fetch(`${getAccessServerUrl()}/founder/password`,{
+    method:'POST',
+    headers:{'content-type':'application/json',authorization:`Bearer ${token}`},
+    body:JSON.stringify({currentPassword,newPassword})
+  });
+  const data = await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data?.error || 'Impossible de changer le mot de passe fondateur');
+  return data as {ok:true};
+}
+
 export async function listMembers(token:string){
   const res = await fetch(`${getAccessServerUrl()}/members`,{headers:{authorization:`Bearer ${token}`}});
   const data = await res.json().catch(()=>({}));
