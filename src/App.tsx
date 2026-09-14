@@ -14,10 +14,12 @@ type Trigger = {
   id: string;
   eventType: 'gift' | 'comment' | 'like' | 'follow' | 'share';
   match: string;
-  action: 'notify' | 'sound' | 'overlay';
+  action: 'notify' | 'sound' | 'overlay' | 'tts' | 'webhook';
   actionValue: string;
   enabled: boolean;
 };
+
+type TriggerAction = { action: 'sound' | 'overlay' | 'tts'; value: string; payload: EventItem };
 
 const icons: Record<string, string> = {
   comment: '💬', gift: '🎁', like: '❤️', follow: '➕', share: '↗️', member: '👋', system: '⚙️'
@@ -32,11 +34,15 @@ export default function App() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [viewerCount, setViewerCount] = useState(0);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'triggers'>('dashboard');
-  const [triggers, setTriggers] = useState<Trigger[]>([
-    { id: 'rose-demo', eventType: 'gift', match: 'Rose', action: 'notify', actionValue: '🌹 Rose reçue !', enabled: true }
-  ]);
+  const [triggers, setTriggers] = useState<Trigger[]>([]);
+  const [overlayMessage, setOverlayMessage] = useState('');
 
   useEffect(() => {
+    window.nexora.getTriggers().then(saved => {
+      if (saved.length) setTriggers(saved);
+      else setTriggers([{ id: 'rose-demo', eventType: 'gift', match: 'Rose', action: 'notify', actionValue: '🌹 {user} a envoyé une Rose !', enabled: true }]);
+    });
+
     const offEvent = window.nexora.onTikTokEvent((event) => {
       setEvents(current => [event, ...current].slice(0, 250));
     });
@@ -48,14 +54,37 @@ export default function App() {
     const offStats = window.nexora.onTikTokStats((stats) => {
       if (typeof stats.viewerCount === 'number') setViewerCount(stats.viewerCount);
     });
-    return () => { offEvent(); offStatus(); offStats(); };
+    const offAction = window.nexora.onTriggerAction((action) => runRendererAction(action));
+
+    return () => { offEvent(); offStatus(); offStats(); offAction(); };
   }, []);
+
+  useEffect(() => {
+    if (triggers.length) window.nexora.saveTriggers(triggers);
+  }, [triggers]);
 
   const totals = useMemo(() => ({
     gifts: events.filter(e => e.type === 'gift').length,
     likes: events.filter(e => e.type === 'like').length,
     comments: events.filter(e => e.type === 'comment').length
   }), [events]);
+
+  function runRendererAction(action: TriggerAction) {
+    if (action.action === 'tts') {
+      const text = action.value || `${action.payload.user} ${action.payload.detail}`;
+      speechSynthesis.cancel();
+      speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+    }
+    if (action.action === 'sound' && action.value) {
+      const audio = new Audio(action.value);
+      audio.play().catch(() => {});
+    }
+    if (action.action === 'overlay') {
+      const text = action.value || `${action.payload.user} · ${action.payload.detail}`;
+      setOverlayMessage(text);
+      window.setTimeout(() => setOverlayMessage(''), 5000);
+    }
+  }
 
   async function connect() {
     if (!username.trim() || connecting) return;
@@ -94,6 +123,7 @@ export default function App() {
   }
 
   return <div className="app">
+    {overlayMessage && <div className="liveOverlay">{overlayMessage}</div>}
     <aside>
       <div className="brand">NEXORA <b>LÉGEND</b></div>
       <nav>
@@ -144,7 +174,7 @@ export default function App() {
             </div>)}</div>}
         </section>
       </> : <section className="card triggerPanel">
-        <div className="feedHead"><div><h2>Moteur de triggers</h2><p>La première version sauvegarde les règles pendant la session. Les actions réelles arrivent ensuite.</p></div><button onClick={addTrigger}>+ Nouveau trigger</button></div>
+        <div className="feedHead"><div><h2>Moteur de triggers</h2><p>Les règles sont maintenant sauvegardées automatiquement et exécutées en direct.</p></div><button onClick={addTrigger}>+ Nouveau trigger</button></div>
         <div className="triggerList">
           {triggers.map(trigger => <div className="trigger" key={trigger.id}>
             <label><input type="checkbox" checked={trigger.enabled} onChange={e => updateTrigger(trigger.id, {enabled:e.target.checked})}/> Actif</label>
@@ -153,12 +183,13 @@ export default function App() {
             </select>
             <input value={trigger.match} onChange={e => updateTrigger(trigger.id, {match:e.target.value})} placeholder="Rose, !boom, 100 likes…"/>
             <select value={trigger.action} onChange={e => updateTrigger(trigger.id, {action:e.target.value as Trigger['action']})}>
-              <option value="notify">Notification</option><option value="sound">Son</option><option value="overlay">Overlay</option>
+              <option value="notify">Notification</option><option value="sound">Son</option><option value="overlay">Overlay</option><option value="tts">TTS</option><option value="webhook">Webhook</option>
             </select>
-            <input value={trigger.actionValue} onChange={e => updateTrigger(trigger.id, {actionValue:e.target.value})} placeholder="Texte, fichier ou overlay"/>
+            <input value={trigger.actionValue} onChange={e => updateTrigger(trigger.id, {actionValue:e.target.value})} placeholder="Texte, URL audio ou webhook"/>
             <button className="iconButton" onClick={() => deleteTrigger(trigger.id)}>✕</button>
           </div>)}
         </div>
+        <p className="hint">Variables disponibles : {'{user}'}, {'{detail}'}, {'{event}'}. Pour un son, utilise une URL audio accessible. Pour un webhook, utilise une URL HTTP(S).</p>
       </section>}
     </main>
   </div>;
@@ -169,9 +200,13 @@ declare global {
     nexora: {
       connectTikTok(username:string): Promise<ConnectResult>;
       disconnectTikTok(): Promise<boolean>;
+      getTriggers(): Promise<Trigger[]>;
+      saveTriggers(triggers:Trigger[]): Promise<boolean>;
+      openExternal(url:string): Promise<boolean>;
       onTikTokEvent(callback:(event:EventItem)=>void): () => void;
       onTikTokStatus(callback:(status:{connected:boolean;roomId?:string|null;reason?:string})=>void): () => void;
       onTikTokStats(callback:(stats:{viewerCount?:number})=>void): () => void;
+      onTriggerAction(callback:(action:TriggerAction)=>void): () => void;
     }
   }
 }
