@@ -22,7 +22,7 @@ export function registerAccessIpc(getWindow:()=>BrowserWindow|null){
   ipcMain.handle('access:revoke', async(_e,token:string,tiktok:string)=>revokeMember(token,tiktok));
 }
 
-export function startRevocationWatch(getWindow:()=>BrowserWindow|null){
+export function startRevocationWatch(getWindow:()=>BrowserWindow|null,onRevoked?:()=>void|Promise<void>){
   let stopped = false;
   const tick = async()=>{
     if(stopped) return;
@@ -30,6 +30,7 @@ export function startRevocationWatch(getWindow:()=>BrowserWindow|null){
     if(state.tiktok && state.allowed){
       const fresh:AccessState = await checkAgencyAccess(state.tiktok);
       if(!fresh.allowed){
+        await onRevoked?.();
         getWindow()?.webContents.send('access:status',fresh);
       }
     }
