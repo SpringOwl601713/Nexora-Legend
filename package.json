@@ -1,0 +1,35 @@
+{
+  "name": "nexora-legend",
+  "version": "0.1.0",
+  "description": "Nexora Légend - TikTok Live interaction manager",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "concurrently \"vite\" \"tsc -p electron/tsconfig.json --watch\" \"wait-on tcp:5173 && electron .\"",
+    "build": "vite build && tsc -p electron/tsconfig.json",
+    "dist": "npm run build && electron-builder --win"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tiktok-live-connector": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "concurrently": "latest",
+    "electron": "latest",
+    "electron-builder": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "wait-on": "latest"
+  },
+  "build": {
+    "appId": "com.nexora.legend",
+    "productName": "Nexora Légend",
+    "directories": { "output": "release" },
+    "files": ["dist/**/*", "dist-electron/**/*", "package.json"],
+    "win": { "target": "nsis" }
+  }
+}
