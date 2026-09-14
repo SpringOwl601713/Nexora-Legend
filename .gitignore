@@ -1,6 +1,12 @@
 node_modules/
 dist/
 dist-electron/
+dist-server/
 release/
 *.log
 .DS_Store
+.env
+.env.*
+!.env.example
+!server/.env.local.example
+server/agency-access.json
