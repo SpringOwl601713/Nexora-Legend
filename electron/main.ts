@@ -1,9 +1,19 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, Notification, shell } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { WebcastPushConnection } from 'tiktok-live-connector';
 
 let win: BrowserWindow | null = null;
 let connection: WebcastPushConnection | null = null;
+
+type Trigger = {
+  id: string;
+  eventType: 'gift' | 'comment' | 'like' | 'follow' | 'share';
+  match: string;
+  action: 'notify' | 'sound' | 'overlay' | 'tts' | 'webhook';
+  actionValue: string;
+  enabled: boolean;
+};
 
 function createWindow(){
   win = new BrowserWindow({
@@ -23,15 +33,68 @@ function createWindow(){
   else win.loadFile(path.join(__dirname,'../dist/index.html'));
 }
 
-function pushEvent(type: string, user = '', detail = '', raw: unknown = null) {
-  win?.webContents.send('tiktok:event', {
-    type,
-    user,
-    detail,
-    raw,
-    timestamp: Date.now()
-  });
+function triggerFile(){
+  return path.join(app.getPath('userData'), 'triggers.json');
 }
+
+function readTriggers(): Trigger[] {
+  try {
+    return JSON.parse(fs.readFileSync(triggerFile(), 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+function writeTriggers(triggers: Trigger[]){
+  fs.mkdirSync(path.dirname(triggerFile()), { recursive: true });
+  fs.writeFileSync(triggerFile(), JSON.stringify(triggers, null, 2), 'utf8');
+}
+
+function matchesTrigger(trigger: Trigger, eventType: string, detail: string) {
+  if (!trigger.enabled || trigger.eventType !== eventType) return false;
+  const needle = trigger.match.trim().toLowerCase();
+  if (!needle) return true;
+  return detail.toLowerCase().includes(needle);
+}
+
+function executeTrigger(trigger: Trigger, payload: { type: string; user: string; detail: string; raw?: unknown }) {
+  const value = trigger.actionValue
+    .replaceAll('{user}', payload.user)
+    .replaceAll('{detail}', payload.detail)
+    .replaceAll('{event}', payload.type);
+
+  if (trigger.action === 'notify') {
+    if (Notification.isSupported()) new Notification({ title: 'Nexora Légend', body: value || `${payload.user} · ${payload.detail}` }).show();
+  } else if (trigger.action === 'sound') {
+    win?.webContents.send('trigger:action', { action: 'sound', value, payload });
+  } else if (trigger.action === 'overlay') {
+    win?.webContents.send('trigger:action', { action: 'overlay', value, payload });
+  } else if (trigger.action === 'tts') {
+    win?.webContents.send('trigger:action', { action: 'tts', value, payload });
+  } else if (trigger.action === 'webhook' && /^https?:\/\//i.test(value)) {
+    fetch(value, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }).catch(() => {});
+  }
+}
+
+function pushEvent(type: string, user = '', detail = '', raw: unknown = null) {
+  const payload = { type, user, detail, raw, timestamp: Date.now() };
+  win?.webContents.send('tiktok:event', payload);
+
+  for (const trigger of readTriggers()) {
+    if (matchesTrigger(trigger, type, detail)) executeTrigger(trigger, payload);
+  }
+}
+
+ipcMain.handle('triggers:get', async () => readTriggers());
+ipcMain.handle('triggers:save', async (_event, triggers: Trigger[]) => {
+  writeTriggers(triggers);
+  return true;
+});
+
+ipcMain.handle('system:openExternal', async (_event, url: string) => {
+  if (/^https?:\/\//i.test(url)) await shell.openExternal(url);
+  return true;
+});
 
 ipcMain.handle('tiktok:connect', async (_event, username:string) => {
   try {
@@ -77,9 +140,7 @@ ipcMain.handle('tiktok:connect', async (_event, username:string) => {
     });
 
     connection.on('roomUser', (data: any) => {
-      win?.webContents.send('tiktok:stats', {
-        viewerCount: data?.viewerCount ?? 0
-      });
+      win?.webContents.send('tiktok:stats', { viewerCount: data?.viewerCount ?? 0 });
     });
 
     connection.on('streamEnd', () => {
@@ -88,7 +149,6 @@ ipcMain.handle('tiktok:connect', async (_event, username:string) => {
 
     pushEvent('system', username, `Connecté à la room ${state?.roomId ?? ''}`.trim(), state);
     win?.webContents.send('tiktok:status', { connected: true, roomId: state?.roomId ?? null });
-
     return { ok: true, roomId: state?.roomId ?? null };
   } catch(err:any){
     console.error('TikTok connection error',err);
