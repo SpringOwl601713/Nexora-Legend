@@ -6,6 +6,8 @@ import { spawn } from 'node:child_process';
 import { WebcastPushConnection } from 'tiktok-live-connector';
 import OBSWebSocket from 'obs-websocket-js';
 import robot from 'robotjs';
+import { registerAccessIpc, startRevocationWatch } from './access-ipc';
+import { readAccessState } from './access';
 
 let win: BrowserWindow | null = null;
 let connection: WebcastPushConnection | null = null;
@@ -13,6 +15,7 @@ let overlayClients = new Set<http.ServerResponse>();
 let overlayServer: http.Server | null = null;
 let obs = new OBSWebSocket();
 let obsConnected = false;
+let stopRevocationWatch: (()=>void) | null = null;
 
 const DATA_DIR = () => app.getPath('userData');
 const filePath = (name:string) => path.join(DATA_DIR(), name);
@@ -43,7 +46,10 @@ function getGiftCatalog():GiftItem[]{ return readJson<GiftItem[]>('gifts.json',[
 function saveGiftCatalog(g:GiftItem[]){ writeJson('gifts.json',g); }
 function activeTriggers():Trigger[]{ const p=getProfiles(),s=getSettings(); return p.find(x=>x.id===s.activeProfileId)?.triggers||p[0]?.triggers||[]; }
 
-function createWindow(){ win=new BrowserWindow({width:1360,height:860,minWidth:980,minHeight:650,backgroundColor:'#080b12',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}}); if(!app.isPackaged)win.loadURL('http://localhost:5173'); else win.loadFile(path.join(__dirname,'../dist/index.html')); }
+function createWindow(){
+  win=new BrowserWindow({width:1360,height:860,minWidth:980,minHeight:650,backgroundColor:'#080b12',webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}});
+  if(!app.isPackaged)win.loadURL('http://localhost:5173'); else win.loadFile(path.join(__dirname,'../dist/index.html'));
+}
 
 function startOverlayServer(){
   const port=getSettings().overlayPort||18181; overlayServer?.close();
@@ -122,13 +128,26 @@ ipcMain.handle('games:get',async()=>getGameState());ipcMain.handle('games:save',
 ipcMain.handle('gifts:list',async()=>getGiftCatalog());
 
 ipcMain.handle('tiktok:connect',async(_e,username:string)=>{
+  const access = readAccessState();
+  const normalized = username.trim().replace(/^@+/, '').toLowerCase();
+  if(!access.allowed || !access.tiktok || access.tiktok !== normalized){
+    return {ok:false,error:'Accès agence requis ou révoqué pour ce compte TikTok.'};
+  }
   try{if(connection){try{connection.disconnect();}catch{}}analytics=defaultAnalytics();connection=new WebcastPushConnection(username,{processInitialData:false,enableExtendedGiftInfo:true,enableWebsocketUpgrade:true,requestPollingIntervalMs:1000});const state=await connection.connect();
     connection.on('chat',(d:any)=>pushEvent('comment',d?.uniqueId||d?.nickname||'Utilisateur',d?.comment||'',d));
     connection.on('gift',(d:any)=>{if(d?.giftType===1&&!d?.repeatEnd)return;const n=d?.giftName||d?.extendedGiftInfo?.name||'Cadeau',c=d?.repeatCount||1;pushEvent('gift',d?.uniqueId||d?.nickname||'Utilisateur',`${n} ×${c}`,d);});
-    connection.on('like',(d:any)=>pushEvent('like',d?.uniqueId||d?.nickname||'Utilisateur',`+${d?.likeCount||1} like${(d?.likeCount||1)>1?'s':''}`,d));connection.on('follow',(d:any)=>pushEvent('follow',d?.uniqueId||d?.nickname||'Utilisateur','Nouvel abonnement',d));connection.on('share',(d:any)=>pushEvent('share',d?.uniqueId||d?.nickname||'Utilisateur','A partagé le live',d));connection.on('member',(d:any)=>pushEvent('member',d?.uniqueId||d?.nickname||'Utilisateur','A rejoint le live',d));connection.on('roomUser',(d:any)=>{const c=d?.viewerCount??0;analytics.viewersPeak=Math.max(analytics.viewersPeak,c);win?.webContents.send('tiktok:stats',{viewerCount:c});});connection.on('streamEnd',()=>win?.webContents.send('tiktok:status',{connected:false,reason:'stream-end'}));pushEvent('system',username,`Connecté à la room ${state?.roomId??''}`.trim(),state);win?.webContents.send('tiktok:status',{connected:true,roomId:state?.roomId??null});return{ok:true,roomId:state?.roomId??null};
-  }catch(e:any){win?.webContents.send('tiktok:status',{connected:false,reason:e?.message||'connection-error'});return{ok:false,error:e?.message||'Impossible de se connecter au live.'};}
+    connection.on('like',(d:any)=>pushEvent('like',d?.uniqueId||d?.nickname||'Utilisateur',`+${d?.likeCount||1} like${(d?.likeCount||1)>1?'s':''}`,d));connection.on('follow',(d:any)=>pushEvent('follow',d?.uniqueId||d?.nickname||'Utilisateur','Nouvel abonnement',d));connection.on('share',(d:any)=>pushEvent('share',d?.uniqueId||d?.nickname||'Utilisateur','A partagé le live',d));connection.on('member',(d:any)=>pushEvent('member',d?.uniqueId||d?.nickname||'Utilisateur','A rejoint le live',d));connection.on('roomUser',(d:any)=>{const c=d?.viewerCount??0;analytics.viewersPeak=Math.max(analytics.viewersPeak,c);win?.webContents.send('tiktok:stats',{viewerCount:c});});connection.on('streamEnd',()=>win?.webContents.send('tiktok:status',{connected:false,reason:'stream-end'}));
+    pushEvent('system',username,`Connecté à la room ${state?.roomId??''}`.trim(),state);win?.webContents.send('tiktok:status',{connected:true,roomId:state?.roomId??null});return {ok:true,roomId:state?.roomId??null};
+  }catch(err:any){win?.webContents.send('tiktok:status',{connected:false,reason:err?.message||'connection-error'});return {ok:false,error:err?.message||'Impossible de se connecter au live.'};}
 });
 ipcMain.handle('tiktok:disconnect',async()=>{try{connection?.disconnect();connection=null;win?.webContents.send('tiktok:status',{connected:false,reason:'manual'});return true;}catch{return false;}});
 
-app.whenReady().then(()=>{analytics=readJson('analytics.json',defaultAnalytics());startOverlayServer();createWindow();});
+app.whenReady().then(()=>{
+  analytics=readJson('analytics.json',defaultAnalytics());
+  registerAccessIpc(()=>win);
+  stopRevocationWatch = startRevocationWatch(()=>win);
+  startOverlayServer();
+  createWindow();
+});
+app.on('before-quit',()=>{stopRevocationWatch?.();});
 app.on('window-all-closed',()=>{overlayServer?.close();if(process.platform!=='darwin')app.quit();});
