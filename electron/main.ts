@@ -145,7 +145,11 @@ ipcMain.handle('tiktok:disconnect',async()=>{try{connection?.disconnect();connec
 app.whenReady().then(()=>{
   analytics=readJson('analytics.json',defaultAnalytics());
   registerAccessIpc(()=>win);
-  stopRevocationWatch = startRevocationWatch(()=>win);
+  stopRevocationWatch = startRevocationWatch(()=>win,async()=>{
+    try{connection?.disconnect();}catch{}
+    connection=null;
+    win?.webContents.send('tiktok:status',{connected:false,reason:'access-revoked'});
+  });
   startOverlayServer();
   createWindow();
 });
