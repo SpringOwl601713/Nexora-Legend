@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('nexora', {
   getAccessState:()=>ipcRenderer.invoke('access:state'),
   checkAccess:(tiktok:string)=>ipcRenderer.invoke('access:check',tiktok),
   founderLogin:(password:string)=>ipcRenderer.invoke('access:founderLogin',password),
+  founderChangePassword:(token:string,currentPassword:string,newPassword:string)=>ipcRenderer.invoke('access:founderPassword',token,currentPassword,newPassword),
   founderMembers:(token:string)=>ipcRenderer.invoke('access:members',token),
   founderEnable:(token:string,tiktok:string,note:string)=>ipcRenderer.invoke('access:enable',token,tiktok,note),
   founderRevoke:(token:string,tiktok:string)=>ipcRenderer.invoke('access:revoke',token,tiktok),
