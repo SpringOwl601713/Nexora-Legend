@@ -1,12 +1,14 @@
 {
   "name": "nexora-legend",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Nexora Légend - TikTok Live interaction manager",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"tsc -p electron/tsconfig.json --watch\" \"wait-on tcp:5173 && electron .\"",
+    "typecheck": "tsc --noEmit && tsc -p electron/tsconfig.json --noEmit",
     "build": "vite build && tsc -p electron/tsconfig.json",
-    "dist": "npm run build && electron-builder --win"
+    "dist": "npm run build && electron-builder --win nsis",
+    "ci:windows": "npm run typecheck && npm run dist"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
@@ -30,8 +32,21 @@
   "build": {
     "appId": "com.nexora.legend",
     "productName": "Nexora Légend",
+    "artifactName": "Nexora-Legend-Setup-${version}.${ext}",
     "directories": { "output": "release" },
     "files": ["dist/**/*", "dist-electron/**/*", "package.json"],
-    "win": { "target": "nsis" }
+    "asar": true,
+    "asarUnpack": ["node_modules/robotjs/**/*"],
+    "npmRebuild": true,
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Nexora Légend"
+    }
   }
 }
