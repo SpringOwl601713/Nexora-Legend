@@ -5,8 +5,11 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently \"vite\" \"tsc -p electron/tsconfig.json --watch\" \"wait-on tcp:5173 && electron .\"",
-    "typecheck": "tsc --noEmit && tsc -p electron/tsconfig.json --noEmit",
-    "build": "vite build && tsc -p electron/tsconfig.json",
+    "dev:access": "tsc -p server/tsconfig.json --watch",
+    "access:build": "tsc -p server/tsconfig.json",
+    "access:start": "node dist-server/access-server.js",
+    "typecheck": "tsc --noEmit && tsc -p electron/tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit",
+    "build": "vite build && tsc -p electron/tsconfig.json && tsc -p server/tsconfig.json",
     "dist": "npm run build && electron-builder --win nsis",
     "ci:windows": "npm run typecheck && npm run dist"
   },
