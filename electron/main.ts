@@ -30,10 +30,15 @@ type MediaItem = { id:string; name:string; path:string; kind:'audio'|'video'|'im
 type GameState = { wheel:string[]; giveaway:string[]; poll:{question:string;options:string[];votes:Record<string,number>}; };
 type GiftItem = { id:string; name:string; diamonds:number; image?:string };
 type OverlayTemplateId = 'neon'|'glass'|'minimal'|'gift'|'goal'|'chat';
-type OverlayConfig = {template:OverlayTemplateId;accent:string;textColor:string;background:string;fontSize:number;duration:number;position:'top'|'center'|'bottom';animation:'pop'|'slide'|'fade';goalLabel:string;goalCurrent:number;goalTarget:number};
+type OverlayEventType = 'gift'|'comment'|'like'|'follow'|'share';
+type OverlayEventRule = {enabled:boolean;template:OverlayTemplateId;sound?:string;media?:string;duration?:number};
+type OverlayConfig = {template:OverlayTemplateId;accent:string;textColor:string;background:string;fontSize:number;duration:number;position:'top'|'center'|'bottom';animation:'pop'|'slide'|'fade';goalLabel:string;goalCurrent:number;goalTarget:number;eventRules:Record<OverlayEventType,OverlayEventRule>};
 
 const defaultAnalytics = ():Analytics => ({startedAt:Date.now(),events:0,comments:0,likes:0,gifts:0,follows:0,shares:0,viewersPeak:0,giftCoins:0});
-const defaultOverlayConfig = ():OverlayConfig => ({template:'neon',accent:'#8b7cff',textColor:'#ffffff',background:'rgba(10,13,20,.88)',fontSize:32,duration:5000,position:'center',animation:'pop',goalLabel:'Objectif',goalCurrent:35,goalTarget:100});
+const defaultEventRules = ():Record<OverlayEventType,OverlayEventRule> => ({
+  gift:{enabled:true,template:'gift'},comment:{enabled:true,template:'chat'},like:{enabled:false,template:'minimal'},follow:{enabled:true,template:'neon'},share:{enabled:true,template:'glass'}
+});
+const defaultOverlayConfig = ():OverlayConfig => ({template:'neon',accent:'#8b7cff',textColor:'#ffffff',background:'rgba(10,13,20,.88)',fontSize:32,duration:5000,position:'center',animation:'pop',goalLabel:'Objectif',goalCurrent:35,goalTarget:100,eventRules:defaultEventRules()});
 let analytics:Analytics = defaultAnalytics();
 
 function readJson<T>(name:string, fallback:T):T { try { return JSON.parse(fs.readFileSync(filePath(name), 'utf8')); } catch { return fallback; } }
@@ -48,7 +53,10 @@ function getGameState():GameState { return readJson('games.json',{wheel:['Rose',
 function saveGameState(s:GameState){ writeJson('games.json',s); }
 function getGiftCatalog():GiftItem[]{ return readJson<GiftItem[]>('gifts.json',[]); }
 function saveGiftCatalog(g:GiftItem[]){ writeJson('gifts.json',g); }
-function getOverlayConfig():OverlayConfig { return {...defaultOverlayConfig(),...readJson<Partial<OverlayConfig>>('overlay-config.json',{})}; }
+function getOverlayConfig():OverlayConfig {
+  const stored=readJson<Partial<OverlayConfig>>('overlay-config.json',{});
+  return {...defaultOverlayConfig(),...stored,eventRules:{...defaultEventRules(),...(stored.eventRules||{})}};
+}
 function saveOverlayConfig(c:OverlayConfig){ writeJson('overlay-config.json',c); }
 function activeTriggers():Trigger[]{ const p=getProfiles(),s=getSettings(); return p.find(x=>x.id===s.activeProfileId)?.triggers||p[0]?.triggers||[]; }
 
@@ -70,15 +78,15 @@ function startOverlayServer(){
       .card{min-width:320px;max-width:900px;opacity:0;transition:.28s ease;background:${cfg.background};color:${cfg.textColor};border:1px solid ${cfg.accent};border-radius:22px;padding:24px 34px;font-size:${cfg.fontSize}px;box-shadow:0 20px 70px rgba(0,0,0,.45);backdrop-filter:blur(12px)}
       .template-neon{box-shadow:0 0 35px ${cfg.accent}55,0 20px 70px rgba(0,0,0,.45);text-shadow:0 0 18px ${cfg.accent}77}.template-glass{background:rgba(20,24,36,.55);border:1px solid rgba(255,255,255,.18)}.template-minimal{background:rgba(0,0,0,.45);border:0;border-radius:12px}.template-gift{border-width:2px}.template-chat{border-radius:14px;padding:18px 22px}.template-goal{padding:22px 28px}
       .anim-pop{transform:scale(.86)}.anim-slide{transform:translateY(28px)}.anim-fade{transform:none}.show{opacity:1!important;transform:none!important}
-      .title{font-weight:800;font-size:.72em;opacity:.78;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em}.message{font-weight:700;line-height:1.2}.meta{font-size:.52em;opacity:.72;margin-top:8px}.giftIcon{font-size:1.8em;margin-right:12px;vertical-align:middle}.goalBar{height:18px;border-radius:999px;background:#ffffff22;overflow:hidden;margin-top:14px}.goalFill{height:100%;background:${cfg.accent};width:0;transition:.4s ease}.goalNumbers{font-size:.55em;opacity:.75;margin-top:7px}img,video{max-width:70vw;max-height:70vh;border-radius:18px}
+      .title{font-weight:800;font-size:.72em;opacity:.78;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em}.message{font-weight:700;line-height:1.2}.meta{font-size:.52em;opacity:.72;margin-top:8px}.goalBar{height:18px;border-radius:999px;background:#ffffff22;overflow:hidden;margin-top:14px}.goalFill{height:100%;background:${cfg.accent};width:0;transition:.4s ease}.goalNumbers{font-size:.55em;opacity:.75;margin-top:7px}.media{display:block;max-width:70vw;max-height:50vh;margin:0 auto 14px;border-radius:18px}
       </style></head><body><div class="wrap"><div id="c" class="card template-${cfg.template} anim-${cfg.animation}"></div></div><script>
-      const c=document.getElementById('c');const es=new EventSource('/events');let t;
+      const c=document.getElementById('c');const es=new EventSource('/events');let t;let audio;
       function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-      es.onmessage=e=>{const p=JSON.parse(e.data);c.className='card template-${cfg.template} anim-${cfg.animation}';c.innerHTML='';
-        if(p.kind==='image'){const i=document.createElement('img');i.src=p.value;c.appendChild(i)}
-        else if(p.kind==='video'){const v=document.createElement('video');v.src=p.value;v.autoplay=true;v.controls=false;c.appendChild(v)}
-        else if(p.kind==='goal'||'${cfg.template}'==='goal'){const cur=Number(p.current??${cfg.goalCurrent}),target=Math.max(1,Number(p.target??${cfg.goalTarget}));const pct=Math.max(0,Math.min(100,(cur/target)*100));c.innerHTML='<div class="title">'+esc(p.label||'${cfg.goalLabel}')+'</div><div class="message">'+esc(p.text||'Objectif en cours')+'</div><div class="goalBar"><div class="goalFill" style="width:'+pct+'%"></div></div><div class="goalNumbers">'+cur+' / '+target+'</div>'}
-        else {const icon='${cfg.template}'==='gift'?'🎁 ':'';c.innerHTML='<div class="title">'+esc(p.title||p.event||'Nexora Légend')+'</div><div class="message">'+icon+esc(p.text||'')+'</div>'+(p.meta?'<div class="meta">'+esc(p.meta)+'</div>':'')}
+      es.onmessage=e=>{const p=JSON.parse(e.data);const tpl=p.template||'${cfg.template}';c.className='card template-'+tpl+' anim-${cfg.animation}';c.innerHTML='';
+        if(audio){try{audio.pause()}catch{}audio=null;} if(p.sound){audio=new Audio(p.sound);audio.play().catch(()=>{});}
+        if(p.media){const isVideo=/\.(mp4|webm)(\?|$)/i.test(p.media);const el=document.createElement(isVideo?'video':'img');el.className='media';el.src=p.media;if(isVideo){el.autoplay=true;el.muted=false;el.controls=false;}c.appendChild(el);}
+        if(p.kind==='goal'||tpl==='goal'){const cur=Number(p.current??${cfg.goalCurrent}),target=Math.max(1,Number(p.target??${cfg.goalTarget}));const pct=Math.max(0,Math.min(100,(cur/target)*100));c.insertAdjacentHTML('beforeend','<div class="title">'+esc(p.label||'${cfg.goalLabel}')+'</div><div class="message">'+esc(p.text||'Objectif en cours')+'</div><div class="goalBar"><div class="goalFill" style="width:'+pct+'%"></div></div><div class="goalNumbers">'+cur+' / '+target+'</div>')}
+        else {const icon=tpl==='gift'?'🎁 ':'';c.insertAdjacentHTML('beforeend','<div class="title">'+esc(p.title||p.event||'Nexora Légend')+'</div><div class="message">'+icon+esc(p.text||'')+'</div>'+(p.meta?'<div class="meta">'+esc(p.meta)+'</div>':'') )}
         requestAnimationFrame(()=>c.classList.add('show'));clearTimeout(t);t=setTimeout(()=>c.classList.remove('show'),p.duration||${cfg.duration});
       };</script></body></html>`);return;}
     res.writeHead(404);res.end('Not found');
@@ -88,6 +96,13 @@ function startOverlayServer(){
 function broadcastOverlay(payload:any){const d=`data: ${JSON.stringify(payload)}\n\n`;for(const c of overlayClients)c.write(d);}
 function matchesTrigger(t:Trigger,eventType:string,detail:string){if(!t.enabled||t.eventType!==eventType)return false;const n=t.match.trim().toLowerCase();return !n||detail.toLowerCase().includes(n);}
 function template(v:string,p:{type:string;user:string;detail:string}){return v.replaceAll('{user}',p.user).replaceAll('{detail}',p.detail).replaceAll('{event}',p.type);}
+function overlayTitle(type:string){return ({gift:'Nouveau cadeau',comment:'Nouveau commentaire',like:'Likes',follow:'Nouveau follow',share:'Partage'} as Record<string,string>)[type]||'Nexora Légend';}
+function routeOverlayEvent(type:string,user:string,detail:string,raw:any){
+  const cfg=getOverlayConfig(); const rule=cfg.eventRules[type as OverlayEventType]; if(!rule?.enabled)return;
+  const payload:any={event:type,title:overlayTitle(type),text:`${user} · ${detail}`,meta:user,template:rule.template,duration:rule.duration||cfg.duration,sound:rule.sound||undefined,media:rule.media||undefined};
+  if(type==='gift'){payload.giftName=raw?.giftName||raw?.extendedGiftInfo?.name;payload.giftCount=Number(raw?.repeatCount||1);}
+  broadcastOverlay(payload);
+}
 
 async function ensureObs(){
   if(obsConnected)return true;
@@ -107,18 +122,18 @@ async function runObsAction(value:string){
 }
 function runHotkey(value:string){const parts=value.toLowerCase().split('+').map(x=>x.trim()).filter(Boolean); if(!parts.length)return;const key=parts.pop()!; const mods=parts.map(m=>m==='ctrl'?'control':m==='win'?'command':m) as any[];try{robot.keyTap(key,mods);}catch{}}
 function runMouse(value:string){const [action,a,b]=value.split(':');try{if(action==='click') robot.mouseClick((a as any)||'left',false);else if(action==='double') robot.mouseClick((a as any)||'left',true);else if(action==='move') robot.moveMouse(Number(a)||0,Number(b)||0);else if(action==='scroll') robot.scrollMouse(0,Number(a)||0);}catch{}}
-function executeTrigger(t:Trigger,p:{type:string;user:string;detail:string;raw?:any}){const v=template(t.actionValue,p);if(t.action==='notify'){if(Notification.isSupported())new Notification({title:'Nexora Légend',body:v||`${p.user} · ${p.detail}`}).show();}else if(['sound','overlay','tts','media'].includes(t.action)){if(t.action==='overlay')broadcastOverlay({event:p.type,title:p.type,text:v||`${p.user} · ${p.detail}`,meta:p.user,duration:getOverlayConfig().duration});win?.webContents.send('trigger:action',{action:t.action,value:v,payload:p});}else if(t.action==='webhook'&&/^https?:\/\//i.test(v)){fetch(v,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(p)}).catch(()=>{});}else if(t.action==='launch'&&v){try{spawn(v,[],{detached:true,stdio:'ignore',shell:true}).unref();}catch{}}else if(t.action==='hotkey'&&v)runHotkey(v);else if(t.action==='mouse'&&v)runMouse(v);else if(t.action==='obs'&&v)void runObsAction(v);}
+function executeTrigger(t:Trigger,p:{type:string;user:string;detail:string;raw?:any}){const v=template(t.actionValue,p);if(t.action==='notify'){if(Notification.isSupported())new Notification({title:'Nexora Légend',body:v||`${p.user} · ${p.detail}`}).show();}else if(['sound','overlay','tts','media'].includes(t.action)){if(t.action==='overlay')broadcastOverlay({event:p.type,title:overlayTitle(p.type),text:v||`${p.user} · ${p.detail}`,meta:p.user,template:getOverlayConfig().eventRules[p.type as OverlayEventType]?.template||getOverlayConfig().template,duration:getOverlayConfig().duration});win?.webContents.send('trigger:action',{action:t.action,value:v,payload:p});}else if(t.action==='webhook'&&/^https?:\/\//i.test(v)){fetch(v,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(p)}).catch(()=>{});}else if(t.action==='launch'&&v){try{spawn(v,[],{detached:true,stdio:'ignore',shell:true}).unref();}catch{}}else if(t.action==='hotkey'&&v)runHotkey(v);else if(t.action==='mouse'&&v)runMouse(v);else if(t.action==='obs'&&v)void runObsAction(v);}
 function updateGiftCatalog(raw:any){const name=raw?.giftName||raw?.extendedGiftInfo?.name; if(!name)return;const diamonds=Number(raw?.diamondCount||raw?.extendedGiftInfo?.diamond_count||0); const image=raw?.giftPictureUrl||raw?.extendedGiftInfo?.icon?.url_list?.[0];const list=getGiftCatalog(); const idx=list.findIndex(g=>g.name===name); const item={id:String(raw?.giftId||name),name,diamonds,image}; if(idx>=0)list[idx]={...list[idx],...item}; else list.push(item); saveGiftCatalog(list); win?.webContents.send('gifts:update',list);}
-function pushEvent(type:string,user='',detail='',raw:any=null){const p={type,user,detail,raw,timestamp:Date.now()};win?.webContents.send('tiktok:event',p);analytics.events++;if(type==='comment')analytics.comments++;if(type==='like')analytics.likes+=Number(raw?.likeCount||1);if(type==='gift'){analytics.gifts+=Number(raw?.repeatCount||1);analytics.giftCoins+=Number(raw?.diamondCount||raw?.extendedGiftInfo?.diamond_count||0)*Number(raw?.repeatCount||1);updateGiftCatalog(raw);}if(type==='follow')analytics.follows++;if(type==='share')analytics.shares++;writeJson('analytics.json',analytics);win?.webContents.send('analytics:update',analytics);for(const t of activeTriggers())if(matchesTrigger(t,type,detail))executeTrigger(t,p);}
+function pushEvent(type:string,user='',detail='',raw:any=null){const p={type,user,detail,raw,timestamp:Date.now()};win?.webContents.send('tiktok:event',p);analytics.events++;if(type==='comment')analytics.comments++;if(type==='like')analytics.likes+=Number(raw?.likeCount||1);if(type==='gift'){analytics.gifts+=Number(raw?.repeatCount||1);analytics.giftCoins+=Number(raw?.diamondCount||raw?.extendedGiftInfo?.diamond_count||0)*Number(raw?.repeatCount||1);updateGiftCatalog(raw);}if(type==='follow')analytics.follows++;if(type==='share')analytics.shares++;writeJson('analytics.json',analytics);win?.webContents.send('analytics:update',analytics);routeOverlayEvent(type,user,detail,raw);for(const t of activeTriggers())if(matchesTrigger(t,type,detail))executeTrigger(t,p);}
 
 ipcMain.handle('profiles:get',async()=>({profiles:getProfiles(),settings:getSettings()}));
 ipcMain.handle('profiles:save',async(_e,p:Profile[],s:AppSettings)=>{saveProfiles(p);setSettings(s);startOverlayServer();return true;});
 ipcMain.handle('analytics:get',async()=>analytics);ipcMain.handle('analytics:reset',async()=>{analytics=defaultAnalytics();writeJson('analytics.json',analytics);return analytics;});
 ipcMain.handle('overlay:url',async()=>`http://127.0.0.1:${getSettings().overlayPort||18181}/overlay`);
-ipcMain.handle('overlay:test',async(_e,text:string)=>{const c=getOverlayConfig();broadcastOverlay({title:'Aperçu Nexora',text,meta:'Test overlay',duration:c.duration,current:c.goalCurrent,target:c.goalTarget,label:c.goalLabel});return true;});
+ipcMain.handle('overlay:test',async(_e,text:string)=>{const c=getOverlayConfig();broadcastOverlay({title:'Aperçu Nexora',text,meta:'Test overlay',template:c.template,duration:c.duration,current:c.goalCurrent,target:c.goalTarget,label:c.goalLabel});return true;});
 ipcMain.handle('overlay:config:get',async()=>getOverlayConfig());
-ipcMain.handle('overlay:config:save',async(_e,c:OverlayConfig)=>{const next={...defaultOverlayConfig(),...c};saveOverlayConfig(next);return next;});
-ipcMain.handle('overlay:preview',async(_e,payload:any)=>{broadcastOverlay({...payload,duration:getOverlayConfig().duration});return true;});
+ipcMain.handle('overlay:config:save',async(_e,c:OverlayConfig)=>{const next={...defaultOverlayConfig(),...c,eventRules:{...defaultEventRules(),...(c.eventRules||{})}};saveOverlayConfig(next);return next;});
+ipcMain.handle('overlay:preview',async(_e,payload:any)=>{broadcastOverlay({...payload,duration:payload?.duration||getOverlayConfig().duration});return true;});
 ipcMain.handle('system:openExternal',async(_e,url:string)=>{if(/^https?:\/\//i.test(url))await shell.openExternal(url);return true;});ipcMain.handle('system:launch',async(_e,c:string)=>{if(c)spawn(c,[],{detached:true,stdio:'ignore',shell:true}).unref();return true;});
 ipcMain.handle('system:hotkey',async(_e,v:string)=>{runHotkey(v);return true;});ipcMain.handle('system:mouse',async(_e,v:string)=>{runMouse(v);return true;});
 ipcMain.handle('obs:connect',async()=>ensureObs());ipcMain.handle('obs:disconnect',async()=>{try{await obs.disconnect();}catch{}obsConnected=false;win?.webContents.send('obs:status',{connected:false});return true;});ipcMain.handle('obs:scenes',async()=>{if(!(await ensureObs()))return[];try{return (await obs.call('GetSceneList')).scenes.map((s:any)=>s.sceneName);}catch{return[];}});ipcMain.handle('obs:action',async(_e,v:string)=>{await runObsAction(v);return true;});
