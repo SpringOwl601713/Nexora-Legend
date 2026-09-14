@@ -8,6 +8,7 @@ import OBSWebSocket from 'obs-websocket-js';
 import robot from 'robotjs';
 import { registerAccessIpc, startRevocationWatch } from './access-ipc';
 import { readAccessState } from './access';
+import { startLocalAccessServer, stopLocalAccessServer } from './access-server-local';
 
 let win: BrowserWindow | null = null;
 let connection: WebcastPushConnection | null = null;
@@ -144,6 +145,7 @@ ipcMain.handle('tiktok:disconnect',async()=>{try{connection?.disconnect();connec
 
 app.whenReady().then(()=>{
   analytics=readJson('analytics.json',defaultAnalytics());
+  startLocalAccessServer();
   registerAccessIpc(()=>win);
   stopRevocationWatch = startRevocationWatch(()=>win,async()=>{
     try{connection?.disconnect();}catch{}
@@ -153,5 +155,5 @@ app.whenReady().then(()=>{
   startOverlayServer();
   createWindow();
 });
-app.on('before-quit',()=>{stopRevocationWatch?.();});
+app.on('before-quit',()=>{stopRevocationWatch?.();stopLocalAccessServer();});
 app.on('window-all-closed',()=>{overlayServer?.close();if(process.platform!=='darwin')app.quit();});
