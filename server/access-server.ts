@@ -128,6 +128,26 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (req.method === 'POST' && url.pathname === '/founder/password') {
+    if (!founderFrom(req)) return json(res, 401, { ok: false, error: 'Non autorisé' });
+    try {
+      const body = await readBody(req);
+      const currentPassword = String(body.currentPassword || '');
+      const newPassword = String(body.newPassword || '');
+      if (!bcrypt.compareSync(currentPassword, store.founderPasswordHash)) {
+        return json(res, 401, { ok: false, error: 'Mot de passe actuel incorrect' });
+      }
+      if (newPassword.length < 12) {
+        return json(res, 400, { ok: false, error: 'Le nouveau mot de passe doit contenir au moins 12 caractères' });
+      }
+      store.founderPasswordHash = bcrypt.hashSync(newPassword, 12);
+      audit(store, 'founder-password-changed', 'founder', undefined, req);
+      return json(res, 200, { ok: true });
+    } catch {
+      return json(res, 400, { ok: false, error: 'Requête invalide' });
+    }
+  }
+
   if (req.method === 'GET' && url.pathname === '/members') {
     if (!founderFrom(req)) return json(res, 401, { ok: false, error: 'Non autorisé' });
     return json(res, 200, { ok: true, members: store.members, audit: store.audit.slice(0, 100) });
