@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron';
 import {
   checkAgencyAccess,
   founderLogin,
+  changeFounderPassword,
   listMembers,
   enableMember,
   revokeMember,
@@ -17,6 +18,7 @@ export function registerAccessIpc(getWindow:()=>BrowserWindow|null){
     return state;
   });
   ipcMain.handle('access:founderLogin', async(_e,password:string)=>founderLogin(password));
+  ipcMain.handle('access:founderPassword', async(_e,token:string,currentPassword:string,newPassword:string)=>changeFounderPassword(token,currentPassword,newPassword));
   ipcMain.handle('access:members', async(_e,token:string)=>listMembers(token));
   ipcMain.handle('access:enable', async(_e,token:string,tiktok:string,note:string)=>enableMember(token,tiktok,note));
   ipcMain.handle('access:revoke', async(_e,token:string,tiktok:string)=>revokeMember(token,tiktok));
