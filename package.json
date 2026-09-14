@@ -1,6 +1,6 @@
 {
   "name": "nexora-legend",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Nexora Légend - TikTok Live interaction manager",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
+    "bcryptjs": "latest",
+    "jsonwebtoken": "latest",
     "obs-websocket-js": "latest",
     "react": "latest",
     "react-dom": "latest",
@@ -19,6 +21,7 @@
     "tiktok-live-connector": "latest"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "latest",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
