@@ -4,6 +4,7 @@ type LiveEvent = { type:string; user:string; detail:string; raw?:unknown; timest
 type LiveStatus = { connected:boolean; roomId?:string|null; reason?:string };
 type LiveStats = { viewerCount?:number };
 type TriggerAction = { action:'sound'|'overlay'|'tts'|'media'; value:string; payload:LiveEvent };
+type MatchScene='intro'|'versus'|'background'|'score'|'mvp'|'victory'|'defeat'|'outro';
 
 contextBridge.exposeInMainWorld('nexora', {
   connectTikTok:(username:string)=>ipcRenderer.invoke('tiktok:connect',username),
@@ -17,6 +18,7 @@ contextBridge.exposeInMainWorld('nexora', {
   getOverlayConfig:()=>ipcRenderer.invoke('overlay:config:get'),
   saveOverlayConfig:(config:unknown)=>ipcRenderer.invoke('overlay:config:save',config),
   previewOverlay:(payload:unknown)=>ipcRenderer.invoke('overlay:preview',payload),
+  previewMatchScene:(scene:MatchScene,payload:unknown={})=>ipcRenderer.invoke('match:preview',scene,payload),
   openExternal:(url:string)=>ipcRenderer.invoke('system:openExternal',url),
   launch:(command:string)=>ipcRenderer.invoke('system:launch',command),
   hotkey:(value:string)=>ipcRenderer.invoke('system:hotkey',value),
