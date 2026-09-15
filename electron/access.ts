@@ -60,7 +60,7 @@ export async function founderLogin(password:string){
   });
   const data = await res.json().catch(()=>({}));
   if(!res.ok) throw new Error(data?.error || 'Connexion fondateur refusée');
-  return data as {ok:true;token:string;expiresInSeconds:number};
+  return data as {ok:true;token:string;expiresInSeconds:number;mustChangePassword?:boolean};
 }
 
 export async function changeFounderPassword(token:string,currentPassword:string,newPassword:string){
