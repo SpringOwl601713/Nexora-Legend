@@ -39,6 +39,36 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Apply Nexora Android icon
+        shell: bash
+        run: |
+          cp android-icon/ic_launcher_mdpi.png android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          cp android-icon/ic_launcher_hdpi.png android/app/src/main/res/mipmap-hdpi/ic_launcher.png
+          cp android-icon/ic_launcher_xhdpi.png android/app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          cp android-icon/ic_launcher_xxhdpi.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp android-icon/ic_launcher_xxxhdpi.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+          cp android-icon/ic_launcher_mdpi.png android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+          cp android-icon/ic_launcher_hdpi.png android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+          cp android-icon/ic_launcher_xhdpi.png android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+          cp android-icon/ic_launcher_xxhdpi.png android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+          cp android-icon/ic_launcher_xxxhdpi.png android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+          cp android-icon/ic_launcher_xxxhdpi.png android/app/src/main/res/drawable/ic_launcher_foreground.png
+          mkdir -p android/app/src/main/res/mipmap-anydpi-v26
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@android:color/black" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          EOF
+          cat > android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+              <background android:drawable="@android:color/black" />
+              <foreground android:drawable="@drawable/ic_launcher_foreground" />
+          </adaptive-icon>
+          EOF
+
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
