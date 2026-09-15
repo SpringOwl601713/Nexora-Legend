@@ -18,6 +18,7 @@
     "bcryptjs": "latest",
     "jsonwebtoken": "latest",
     "obs-websocket-js": "latest",
+    "qrcode": "latest",
     "react": "latest",
     "react-dom": "latest",
     "robotjs": "latest",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@types/jsonwebtoken": "latest",
     "@types/node": "latest",
+    "@types/qrcode": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
     "concurrently": "latest",
