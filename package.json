@@ -11,9 +11,14 @@
     "typecheck": "tsc --noEmit && tsc -p electron/tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit",
     "build": "vite build && tsc -p electron/tsconfig.json && tsc -p server/tsconfig.json",
     "dist": "npm run build && electron-builder --win nsis",
-    "ci:windows": "npm run typecheck && npm run dist"
+    "ci:windows": "npm run typecheck && npm run dist",
+    "android:sync": "npm run build && cap sync android",
+    "android:open": "cap open android",
+    "android:apk": "npm run android:sync && cd android && gradlew assembleDebug"
   },
   "dependencies": {
+    "@capacitor/android": "latest",
+    "@capacitor/core": "latest",
     "@vitejs/plugin-react": "latest",
     "bcryptjs": "latest",
     "jsonwebtoken": "latest",
@@ -25,6 +30,7 @@
     "tiktok-live-connector": "latest"
   },
   "devDependencies": {
+    "@capacitor/cli": "latest",
     "@types/jsonwebtoken": "latest",
     "@types/node": "latest",
     "@types/qrcode": "latest",
