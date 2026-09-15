@@ -12,6 +12,7 @@ export type MobileDashboardSnapshot = {
 
 type MobileServerOptions={
   port?:number;
+  getState?:()=>MobileDashboardSnapshot;
   getSnapshot:()=>MobileDashboardSnapshot;
   previewOverlay:(payload:any)=>void;
   previewMatch:(scene:string,payload:any)=>void;
