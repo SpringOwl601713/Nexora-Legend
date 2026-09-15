@@ -2,7 +2,7 @@ name: Android APK
 
 on:
   push:
-    branches: [ feature/android-apk-shell ]
+    branches: [ main, feature/android-apk-shell ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
