@@ -11,6 +11,7 @@ import { registerAccessIpc, startRevocationWatch } from './access-ipc';
 import { readAccessState } from './access';
 import { startLocalAccessServer, stopLocalAccessServer } from './access-server-local';
 import { startMobileDashboardServer, stopMobileDashboardServer, getMobileDashboardInfo } from './mobile-server';
+import { exportMatchSceneVideo } from './match-export';
 
 let win: BrowserWindow | null = null;
 let connection: WebcastPushConnection | null = null;
@@ -103,6 +104,7 @@ ipcMain.handle('profiles:get',async()=>({profiles:getProfiles(),settings:getSett
 ipcMain.handle('profiles:save',async(_e,p:Profile[],s:AppSettings)=>{saveProfiles(p);setSettings(s);startOverlayServer();return true;});
 ipcMain.handle('analytics:get',async()=>analytics);ipcMain.handle('analytics:reset',async()=>{analytics=defaultAnalytics();writeJson('analytics.json',analytics);return analytics;});
 ipcMain.handle('overlay:url',async()=>`http://127.0.0.1:${getSettings().overlayPort||18181}/overlay`);ipcMain.handle('overlay:test',async(_e,text:string)=>{const c=getOverlayConfig();broadcastOverlay({title:'Aperçu Nexora',text,meta:'Test overlay',template:c.template,duration:c.duration,current:c.goalCurrent,target:c.goalTarget,label:c.goalLabel});return true;});ipcMain.handle('overlay:config:get',async()=>getOverlayConfig());ipcMain.handle('overlay:config:save',async(_e,c:OverlayConfig)=>{const next={...defaultOverlayConfig(),...c,eventRules:{...defaultEventRules(),...(c.eventRules||{})}};saveOverlayConfig(next);return next;});ipcMain.handle('overlay:preview',async(_e,payload:any)=>{broadcastOverlay({...payload,duration:payload?.duration||getOverlayConfig().duration});return true;});ipcMain.handle('match:preview',async(_e,scene:MatchScene,payload:any={})=>{broadcastOverlay({kind:'match-scene',scene,...payload});return true;});
+ipcMain.handle('match:export',async(_e,scene:MatchScene,payload:any={})=>exportMatchSceneVideo(scene,payload));
 ipcMain.handle('mobile:info',async()=>getMobileDashboardInfo());
 ipcMain.handle('mobile:qr',async()=>{const info=getMobileDashboardInfo();if(!info.url)return '';return QRCode.toDataURL(info.url,{width:220,margin:1,errorCorrectionLevel:'M'});});
 ipcMain.handle('system:openExternal',async(_e,url:string)=>{if(/^https?:\/\//i.test(url))await shell.openExternal(url);return true;});ipcMain.handle('system:launch',async(_e,c:string)=>{if(c)spawn(c,[],{detached:true,stdio:'ignore',shell:true}).unref();return true;});ipcMain.handle('system:hotkey',async(_e,v:string)=>{runHotkey(v);return true;});ipcMain.handle('system:mouse',async(_e,v:string)=>{runMouse(v);return true;});
