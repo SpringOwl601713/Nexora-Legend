@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('nexora', {
   saveOverlayConfig:(config:unknown)=>ipcRenderer.invoke('overlay:config:save',config),
   previewOverlay:(payload:unknown)=>ipcRenderer.invoke('overlay:preview',payload),
   previewMatchScene:(scene:MatchScene,payload:unknown={})=>ipcRenderer.invoke('match:preview',scene,payload),
+  exportMatchScene:(scene:MatchScene,payload:unknown={})=>ipcRenderer.invoke('match:export',scene,payload),
   getMobileInfo:()=>ipcRenderer.invoke('mobile:info'),
   getMobileQr:()=>ipcRenderer.invoke('mobile:qr'),
   openExternal:(url:string)=>ipcRenderer.invoke('system:openExternal',url),
