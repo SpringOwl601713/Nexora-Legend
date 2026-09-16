@@ -22,6 +22,9 @@ declare global {
       previewOverlay:(payload:unknown)=>Promise<any>;
       previewMatchScene:(scene:MatchScene,payload?:unknown)=>Promise<any>;
       exportMatchScene:(scene:MatchScene,payload?:unknown)=>Promise<any>;
+      exportWholeMatchPack:(payload?:unknown)=>Promise<any>;
+      saveMatchPresetSnapshot:(payload?:unknown)=>Promise<any>;
+      stopMatchScene:()=>Promise<any>;
       getMobileInfo:()=>Promise<any>;
       getMobileQr:()=>Promise<any>;
       openExternal:(url:string)=>Promise<any>;
