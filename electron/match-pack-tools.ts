@@ -4,7 +4,7 @@ import path from 'node:path';
 import { exportMatchSceneVideo } from './match-export';
 
 type MatchScene='intro'|'versus'|'background'|'score'|'mvp'|'victory'|'defeat'|'outro';
-type MatchPayload={left?:string;right?:string;scoreA?:number;scoreB?:number;name?:string;duration?:number;accent?:string;secondary?:string;introText?:string;outroText?:string;logoLeft?:string;logoRight?:string;packId?:string};
+type MatchPayload={left?:string;right?:string;scoreA?:number;scoreB?:number;name?:string;duration?:number;accent?:string;secondary?:string;introText?:string;outroText?:string;logoLeft?:string;logoRight?:string;packId?:string;format?:'webm'|'mp4'};
 type ExportResult={ok:boolean;canceled?:boolean;paths?:string[];error?:string};
 
 const scenes:MatchScene[]=['intro','versus','background','score','mvp','victory','defeat','outro'];
@@ -13,10 +13,11 @@ export async function exportWholeMatchPack(payload:MatchPayload={}):Promise<Expo
   const pick=await dialog.showOpenDialog({title:'Choisir le dossier d’export du pack',properties:['openDirectory','createDirectory']});
   if(pick.canceled||!pick.filePaths[0])return {ok:false,canceled:true};
   const dir=pick.filePaths[0];
+  const format=payload.format==='mp4'?'mp4':'webm';
   const paths:string[]=[];
   for(const scene of scenes){
-    const target=path.join(dir,`nexora-${scene}.webm`);
-    const r=await exportMatchSceneVideo(scene,{...payload,__targetPath:target} as MatchPayload & {__targetPath:string});
+    const target=path.join(dir,`nexora-${scene}.${format}`);
+    const r=await exportMatchSceneVideo(scene,{...payload,format,__targetPath:target} as MatchPayload & {__targetPath:string});
     if(!r.ok)return {ok:false,error:r.error||`Export impossible pour ${scene}`,paths};
     if(r.path)paths.push(r.path);
   }
