@@ -19,9 +19,11 @@ export type LivePackPreset={
 };
 
 export type LivePackTriggerMap=Partial<Record<'gift'|'comment'|'like'|'follow'|'share',LivePackSceneId>>;
+export type LivePackObsMap=Partial<Record<LivePackSceneId,string>>;
 
 const PRESETS_KEY='nexora.livePack.presets.v1';
 const TRIGGERS_KEY='nexora.livePack.triggers.v1';
+const OBS_KEY='nexora.livePack.obs.v1';
 
 export function loadLivePackPresets():LivePackPreset[]{
   try{const raw=localStorage.getItem(PRESETS_KEY);const parsed=raw?JSON.parse(raw):[];return Array.isArray(parsed)?parsed:[];}catch{return [];}
@@ -37,6 +39,14 @@ export function loadLivePackTriggerMap():LivePackTriggerMap{
 
 export function saveLivePackTriggerMap(map:LivePackTriggerMap){
   localStorage.setItem(TRIGGERS_KEY,JSON.stringify(map));
+}
+
+export function loadLivePackObsMap():LivePackObsMap{
+  try{const raw=localStorage.getItem(OBS_KEY);const parsed=raw?JSON.parse(raw):{};return parsed&&typeof parsed==='object'?parsed:{};}catch{return {};}
+}
+
+export function saveLivePackObsMap(map:LivePackObsMap){
+  localStorage.setItem(OBS_KEY,JSON.stringify(map));
 }
 
 export function makeLivePackPayload(input:{
